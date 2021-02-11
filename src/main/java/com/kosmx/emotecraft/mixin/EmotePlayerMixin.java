@@ -61,6 +61,11 @@ public abstract class EmotePlayerMixin extends PlayerEntity implements EmotePlay
     }
 
     @Override
+    public void stopEmote() {
+        if(this.emote != null)this.emote.stop();
+    }
+
+    @Override
     @Nullable
     public EmotePlayer getEmote(){
         return this.emote;
@@ -82,13 +87,7 @@ public abstract class EmotePlayerMixin extends PlayerEntity implements EmotePlay
         if(EmotePlayer.isRunningEmote(this.emote)){
             this.bodyYaw = (this.bodyYaw * 3 + this.yaw) / 4; //to set the body to the correct direction smooth.
             //if not the clientPlayer playing this emote (not the camera or the camera is in someone else) OR I can play that emote
-            if(this == MinecraftClient.getInstance().getCameraEntity() && this.emote.perspectiveRedux){
-                if(!PerspectiveReduxProxy.getPerspective()){
-                    //this.emote.perspectiveRedux = false;
-                    //this.emote.perspective = null;
-                }
-            }
-            else if(this == MinecraftClient.getInstance().getCameraEntity() && this.emote.perspective != null){
+            if(this == MinecraftClient.getInstance().getCameraEntity() && !this.emote.perspectiveRedux && this.emote.perspective != null){
                 if(MinecraftClient.getInstance().options.getPerspective() != Perspective.THIRD_PERSON_FRONT){
                     this.emote.perspective = null;
                 }

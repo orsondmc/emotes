@@ -4,6 +4,7 @@ package com.kosmx.emotecraft.network;
 import com.kosmx.emotecraft.EmotecraftCallbacks;
 import com.kosmx.emotecraft.Main;
 import com.kosmx.emotecraft.config.EmoteHolder;
+import com.kosmx.emotecraft.integration.collar.ClientSideNetworking;
 import com.kosmx.emotecraft.mixinInterface.EmotePlayerInterface;
 import com.kosmx.emotecraft.mixinInterface.IEmotecraftPresence;
 import com.kosmx.emotecraft.model.EmotePlayer;
@@ -94,11 +95,16 @@ public class ClientNetwork {
 
     public static void sendEmotePacket(EmoteData emote, PlayerEntity player, boolean isRepeating){
         try{
-            PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
-            EmotePacket emotePacket = new EmotePacket(emote, player.getUuid());
-            emotePacket.isRepeat = isRepeating;
-            emotePacket.write(buf, ((IEmotecraftPresence)(MinecraftClient.getInstance().getNetworkHandler())).getInstalledEmotecraft());
-            ClientPlayNetworking.send(MainNetwork.EMOTE_PLAY_NETWORK_PACKET_ID, buf);
+            if(canSendEmote()) {
+                PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
+                EmotePacket emotePacket = new EmotePacket(emote, player.getUuid());
+                emotePacket.isRepeat = isRepeating;
+                emotePacket.write(buf, ((IEmotecraftPresence) (MinecraftClient.getInstance().getNetworkHandler())).getInstalledEmotecraft());
+                ClientPlayNetworking.send(MainNetwork.EMOTE_PLAY_NETWORK_PACKET_ID, buf);
+            }
+            else {
+                ClientSideNetworking.onClientSendEmotePlay(player, emote, isRepeating);
+            }
         }
         catch (Exception e){
             Main.log(Level.ERROR, "cannot play emote reason: " + e.getMessage());
@@ -107,21 +113,26 @@ public class ClientNetwork {
     }
 
 
-    public static void clientReceiveEmote(EmotePacket emotePacket){
-        PlayerEntity playerEntity = MinecraftClient.getInstance().world.getPlayerByUuid(emotePacket.getPlayer());
-        boolean blocked = MinecraftClient.getInstance().shouldBlockMessages(emotePacket.getPlayer()) && Main.config.enablePlayerSafety;
+    public static void clientReceiveEmote(EmoteData emoteData, boolean isRepeat , @Nullable PlayerEntity playerEntity){
         if(playerEntity != null){
-            if(!emotePacket.isRepeat || ! EmotePlayer.isRunningEmote(((EmotePlayerInterface) playerEntity).getEmote())){
-                ActionResult result = EmotecraftCallbacks.startPlayReceivedEmote.invoker().playReceivedEmote(emotePacket.getEmote(), playerEntity, blocked);
+            boolean blocked = MinecraftClient.getInstance().shouldBlockMessages(playerEntity.getUuid()) && Main.config.enablePlayerSafety;
+            if(!isRepeat || ! EmotePlayer.isRunningEmote(((EmotePlayerInterface) playerEntity).getEmote())){
+                ActionResult result = EmotecraftCallbacks.startPlayReceivedEmote.invoker().playReceivedEmote(emoteData, playerEntity, blocked);
                 if(result == ActionResult.FAIL || blocked){
                     return;
                 }
-                ((EmotePlayerInterface) playerEntity).playEmote(emotePacket.getEmote());
+                ((EmotePlayerInterface) playerEntity).playEmote(emoteData);
             }else{
                 ((EmotePlayerInterface) playerEntity).resetLastUpdated();
             }
         }
     }
+
+    public static void clientReceiveEmote(EmotePacket emotePacket){
+        PlayerEntity playerEntity = MinecraftClient.getInstance().world.getPlayerByUuid(emotePacket.getPlayer());
+        clientReceiveEmote(emotePacket.getEmote(), emotePacket.isRepeat, playerEntity);
+    }
+
     public static void clientSendStop(){
 
         Objects.requireNonNull(((EmotePlayerInterface) Objects.requireNonNull(MinecraftClient.getInstance().getCameraEntity())).getEmote()).stop();
@@ -130,12 +141,20 @@ public class ClientNetwork {
         packet.write(buf);
         ClientPlayNetworking.send(MainNetwork.EMOTE_STOP_NETWORK_PACKET_ID, buf);
     }
-    public static void clientReceiveStop(StopPacket stopPacket){
-        EmotePlayerInterface player = (EmotePlayerInterface) MinecraftClient.getInstance().world.getPlayerByUuid(stopPacket.getPlayer());
-        if(player != null && EmotePlayer.isRunningEmote(player.getEmote())) player.getEmote().stop();
+    public static void clientReceiveStop(EmotePlayerInterface player){
+        if(player != null)player.stopEmote();
         if(player == MinecraftClient.getInstance().player){
             MinecraftClient.getInstance().inGameHud.getChatHud().addMessage(new TranslatableText("emotecraft.blockedEmote"));
         }
+    }
+
+    public static void clientReceiveStop(StopPacket stopPacket){
+        EmotePlayerInterface player = (EmotePlayerInterface) MinecraftClient.getInstance().world.getPlayerByUuid(stopPacket.getPlayer());
+        clientReceiveStop(player);
+    }
+
+    public static boolean canSendEmote(){
+        return ( ClientPlayNetworking.canSend(MainNetwork.EMOTE_PLAY_NETWORK_PACKET_ID) ||((IEmotecraftPresence)(MinecraftClient.getInstance().getNetworkHandler())).getInstalledEmotecraft() != 0);
     }
 
 }

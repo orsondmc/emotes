@@ -26,6 +26,12 @@ public class EmotePacket {
     public EmotePacket(){
     }
 
+    /**
+     * EmoteRead will happen, even if the emote is invalid
+     * @param buf ByteBuf to read
+     * @param validationThreshold validation threshold
+     * @return true if the emote valid
+     */
     public boolean read(ByteBuf buf, float validationThreshold){
         this.version = buf.readInt();
         this.isRepeat = buf.readBoolean();
