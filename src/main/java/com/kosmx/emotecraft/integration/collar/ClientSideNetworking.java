@@ -70,6 +70,7 @@ public class ClientSideNetworking {
     public static void onCollarReceiveStop(PlayerEntity player){
 
         ClientNetwork.clientReceiveStop((EmotePlayerInterface) player);
+        //The casting will be possible, after the mixins apply in runtime.
     }
 
 }
